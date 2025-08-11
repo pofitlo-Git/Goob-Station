@@ -8,7 +8,7 @@ using Content.Shared._Shitmed.Targeting;
 namespace Content.Server._pofitlo;
 
 [RegisterComponent, AutoGenerateComponentPause]
-public sealed partial class CanHostageComponent : Component
+public sealed partial class CanBeTakenHostageComponent : Component
 {
     [DataField]
     public float MakeHostageDoAfterDuration = 3f;
@@ -19,21 +19,29 @@ public sealed partial class CanHostageComponent : Component
     [DataField, AutoPausedField]
     public TimeSpan UpdateInterval = TimeSpan.FromSeconds(0.5); //TODO быть может, сделать чаще
 
+    [DataField]
     public EntityUid HostageTakerUid;
 
+    [DataField]
     public EntityUid HostageUid;
 
     [DataField]
-    public float Range = 3f; //TODO подобрать и переименовать
+    public float Range = 1.5f;
 
     [DataField]
     public bool IsHostage = false;
+
+    [DataField]
+    public bool WaitingToExecute = false;
 
     [DataField]
     public TargetBodyPart RequiredBodyPart = TargetBodyPart.Head;
 
     [DataField]
     public WeaponType WeaponType;
+
+    [DataField]
+    public EntityUid HostageTakerWeaponUid;
 }
 
 public enum WeaponType

@@ -1,0 +1,9 @@
+take-hostage-start = Are you trying to take the { $target } hostage.
+verb-take-hostage = Take a hostage.
+take-hostage-forbidden-not-combat-mode = You must be in combat mode.
+take-hostage-forbidden-not-aiming-correctly = You have to aim for the head.
+take-hostage-success-with-melee = { $hostTaker } puts a blade to { $target } neck!
+take-hostage-success-with-range = { $hostTaker } puts the muzzle to { $target } temple!
+take-hostage-stab =  { $hostTaker } stab { $target }!
+take-hostage-shoot = { $hostTaker } shot { $target }!
+take-hostage-stop = You no longer take hostage

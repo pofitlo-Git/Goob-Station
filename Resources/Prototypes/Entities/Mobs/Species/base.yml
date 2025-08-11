@@ -313,6 +313,7 @@
 #        color: "#FF0000"
 #      Burn:
 #        sprite: _Shitmed/Mobs/Effects/burn_damage.rsi
+  - type: CanBeTakenHostage
   - type: GenericVisualizer
     visuals:
       enum.CreamPiedVisuals.Creamed:
