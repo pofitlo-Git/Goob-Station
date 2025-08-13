@@ -57,6 +57,12 @@ public sealed partial class GunSystem
         UpdateAmmoCount(uid, component);
     }
 
+    // _pofitlo edit -start-
+    public void PublicUpdateAmmoCount(EntityUid uid, AmmoCounterComponent component)
+    {
+        UpdateAmmoCount(uid, component);
+    }
+    // _pofitlo edit -end-
     private void UpdateAmmoCount(EntityUid uid, AmmoCounterComponent component)
     {
         if (component.Control == null)

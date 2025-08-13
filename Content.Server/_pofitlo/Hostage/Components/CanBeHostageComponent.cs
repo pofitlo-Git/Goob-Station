@@ -32,7 +32,13 @@ public sealed partial class CanBeTakenHostageComponent : Component
     public bool IsHostage = false;
 
     [DataField]
-    public bool WaitingToExecute = false;
+    public bool WaitToPredictShot = false;
+
+    [DataField]
+    public TimeSpan WaitToPredictShotTimer = TimeSpan.Zero;
+
+    [DataField]
+    public TimeSpan WaitToPredictShotInterval = TimeSpan.FromSeconds(0.3);
 
     [DataField]
     public TargetBodyPart RequiredBodyPart = TargetBodyPart.Head;

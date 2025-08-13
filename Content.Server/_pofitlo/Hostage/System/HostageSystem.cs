@@ -22,6 +22,8 @@ using Robust.Shared.Timing;
 using System.Linq;
 using Content.Shared.Cuffs.Components;
 using Content.Shared.Wieldable.Components;
+using Content.Shared._pofitlo.Hostage.System;
+using Content.Shared.Weapons.Ranged.Events;
 
 namespace Content.Server._pofitlo.Hostage.System;
 
@@ -34,8 +36,8 @@ public sealed class HostageSystem : EntitySystem
     [Dependency] private readonly SharedTransformSystem _transform = default!;
     [Dependency] private readonly DamageableSystem _damageSystem = default!;
     [Dependency] private readonly BloodstreamSystem _bloodstreamSystem = default!;
-    [Dependency] private readonly SharedGunSystem _shootSystem = default!;
     [Dependency] private readonly SharedMeleeWeaponSystem _meleeWeaponSystem = default!;
+    [Dependency] private readonly SharedGunSystem _shootSystem = default!;
 
     public override void Initialize()
     {
@@ -118,7 +120,7 @@ public sealed class HostageSystem : EntitySystem
 
         var target = args.Target;
 
-        _popupSystem.PopupEntity(Loc.GetString("take-hostage-start", ("target", target)), target, target, PopupType.LargeCaution);
+        _popupSystem.PopupEntity(Loc.GetString("take-hostage-start", ("target", target)), target, target, PopupType.Medium);
         _doAfter.TryStartDoAfter(doAfterArgs);
     }
 
@@ -133,7 +135,7 @@ public sealed class HostageSystem : EntitySystem
     {
         if (!TryComp<CombatModeComponent>(HostageTakerUid, out var combatComp) || !combatComp.IsInCombatMode)
         {
-            _popupSystem.PopupEntity(Loc.GetString("take-hostage-forbidden-not-combat-mode"), HostageTakerUid, HostageTakerUid, PopupType.LargeCaution);
+            _popupSystem.PopupEntity(Loc.GetString("take-hostage-forbidden-not-combat-mode"), HostageTakerUid, HostageTakerUid, PopupType.Medium);
             return false;
         }
         else return true;
@@ -143,7 +145,7 @@ public sealed class HostageSystem : EntitySystem
     {
         if (!TryComp<TargetingComponent>(HostageTakerUid, out var targetingComp) || targetingComp.Target != entity.Comp.RequiredBodyPart)
         {
-            _popupSystem.PopupEntity(Loc.GetString("take-hostage-forbidden-not-aiming-correctly"), HostageTakerUid, HostageTakerUid, PopupType.LargeCaution);
+            _popupSystem.PopupEntity(Loc.GetString("take-hostage-forbidden-not-aiming-correctly"), HostageTakerUid, HostageTakerUid, PopupType.Medium);
             return false;
         }
         else return true;
@@ -242,7 +244,6 @@ public sealed class HostageSystem : EntitySystem
         component.HostageTakerUid = args.User;
         component.HostageUid = target;
         component.IsHostage = true;
-        component.WaitingToExecute = true;
 
         PopupOnHostageTakeSuccess(component);
     }
@@ -277,23 +278,52 @@ public sealed class HostageSystem : EntitySystem
         var hostageQuery = EntityQueryEnumerator<CanBeTakenHostageComponent, TransformComponent>();
         while (hostageQuery.MoveNext(out var uid, out var hostageComp, out var transform))
         {
-            if (hostageComp.NextUpdate > _timing.CurTime || !hostageComp.IsHostage)
+            if (hostageComp.NextUpdate > _timing.CurTime)
                 continue;
 
             hostageComp.NextUpdate = _timing.CurTime + hostageComp.UpdateInterval;
 
-            var hostageTakerCoord = Transform(hostageComp.HostageTakerUid).Coordinates;
+            if (hostageComp.IsHostage)
+                UpdateTakeDistanceControl(hostageComp, transform);
+            if (hostageComp.WaitToPredictShot)
+                UpdateWaitToPredictShot(hostageComp);
+        }
+    }
 
-            if (!_transform.InRange(hostageTakerCoord, transform.Coordinates, hostageComp.Range))
+    private void UpdateTakeDistanceControl(CanBeTakenHostageComponent component, TransformComponent transform)
+    {
+        var hostageTakerCoord = Transform(component.HostageTakerUid).Coordinates;
+
+        if (!_transform.InRange(hostageTakerCoord, transform.Coordinates, component.Range))
+        {
+            if (component.WeaponType == WeaponType.Melee && TryMakeMeleeLightAttack(component))
             {
-                if(hostageComp.WeaponType == WeaponType.Melee && TryMakeMeleeLightAttack(hostageComp))
-                    AnyTypeWeaponMakeDamage(hostageComp, 100f);
-                if (hostageComp.WeaponType == WeaponType.Ranged)
-                    TryMakeShoot(hostageComp, transform.Coordinates);
-
-                StopTakeHostage(hostageComp);
+                AnyTypeWeaponMakeDamage(component, 100f);
+                StopTakeHostage(component);
+            }
+            if (component.WeaponType == WeaponType.Ranged)
+            {
+                TryMakeShoot(component, transform.Coordinates);
+                UpdateWaitToPredictShotTimer(component);
             }
         }
+    }
+
+    private void UpdateWaitToPredictShotTimer(CanBeTakenHostageComponent component)
+    {
+        if (component.WaitToPredictShot)
+            return;
+        component.WaitToPredictShot = true;
+        component.WaitToPredictShotTimer = _timing.CurTime + component.WaitToPredictShotInterval;
+    }
+
+    private void UpdateWaitToPredictShot(CanBeTakenHostageComponent component)
+    {
+        if (_timing.CurTime < component.WaitToPredictShotTimer)
+            return;
+
+        component.WaitToPredictShot = false;
+        StopTakeHostage(component);
     }
 
     private void StopTakeHostage(CanBeTakenHostageComponent component)
@@ -330,7 +360,12 @@ public sealed class HostageSystem : EntitySystem
             || IsWeaponInActiveHandValid(component.HostageTakerWeaponUid, component))
             return false;
 
-        _shootSystem.AttemptShoot(component.HostageTakerUid, component.HostageTakerWeaponUid, gunComp, toCoordinates); //TODO проверить - можно ли стрелять без патрон
+        var shooterNet = GetNetEntity(component.HostageTakerUid);
+        var weaponNet = GetNetEntity(component.HostageTakerWeaponUid);
+        RaiseNetworkEvent(new HostageAttemptShootEvent(shooterNet, weaponNet), component.HostageTakerUid);
+
+        _shootSystem.AttemptShoot(component.HostageTakerUid, component.HostageTakerWeaponUid, gunComp, toCoordinates);
+
         return true;
     }
 
