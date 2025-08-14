@@ -50,16 +50,16 @@ public sealed class HostageSystem : EntitySystem
     {
         if (!component.IsHostage
             || args.Origin != component.HostageTakerUid
-            || !IsWeaponInActiveHandValid(component.HostageTakerUid, component))
+            || !IsWeaponInActiveHandValid(component))
             return;
 
         AnyTypeWeaponMakeDamage(component, 100f);
 
     }
 
-    private bool IsWeaponInActiveHandValid(EntityUid hostageTakerUid, CanBeTakenHostageComponent component)
+    private bool IsWeaponInActiveHandValid(CanBeTakenHostageComponent component)
     {
-        return GetItemUidInActiveHand(hostageTakerUid) == component.HostageTakerWeaponUid;
+        return GetItemUidInActiveHand(component.HostageTakerUid) == component.HostageTakerWeaponUid;
     }
     private EntityUid? GetItemUidInActiveHand(EntityUid uid)
     {
@@ -126,12 +126,12 @@ public sealed class HostageSystem : EntitySystem
 
     private bool IsCanHostage(GetVerbsEvent<AlternativeVerb> args, Entity<CanBeTakenHostageComponent> entity)
     {
-        return IsUserInCombatMode(entity, args.User)
+        return IsUserInCombatMode(args.User)
             && IsUserAimingCorrectly(entity, args.User)
             && IsUserNotPacifist(entity);
     }
 
-    private bool IsUserInCombatMode(Entity<CanBeTakenHostageComponent> entity, EntityUid HostageTakerUid)
+    private bool IsUserInCombatMode(EntityUid HostageTakerUid)
     {
         if (!TryComp<CombatModeComponent>(HostageTakerUid, out var combatComp) || !combatComp.IsInCombatMode)
         {
@@ -296,6 +296,12 @@ public sealed class HostageSystem : EntitySystem
 
         if (!_transform.InRange(hostageTakerCoord, transform.Coordinates, component.Range))
         {
+            if (!IsUserInCombatMode(component.HostageTakerUid))
+            {
+                StopTakeHostage(component);
+                return;
+            }
+
             if (component.WeaponType == WeaponType.Melee && TryMakeMeleeLightAttack(component))
             {
                 AnyTypeWeaponMakeDamage(component, 100f);
@@ -357,7 +363,7 @@ public sealed class HostageSystem : EntitySystem
     private bool TryMakeShoot(CanBeTakenHostageComponent component, EntityCoordinates toCoordinates)
     {
         if (!TryComp<GunComponent>(component.HostageTakerWeaponUid, out var gunComp)
-            || IsWeaponInActiveHandValid(component.HostageTakerWeaponUid, component))
+            || !IsWeaponInActiveHandValid(component))
             return false;
 
         var shooterNet = GetNetEntity(component.HostageTakerUid);
